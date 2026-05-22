@@ -1,0 +1,103 @@
+hydra:
+  searchpath:
+    - file://verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+ttrl:
+  # Whether to enable TTRL, refer to (https://arxiv.org/abs/2504.16084)
+  enable: False
+
+  # Number of rollouts per prompt, used for actual training
+  n_samples_per_prompt: ${actor_rollout_ref.rollout.n}
+
+  # Number of rollouts per prompt, used for label voting
+  n_votes_per_prompt: ${actor_rollout_ref.rollout.n}
+
+unsupervised_reward:
+  # Whether to enable unsupervised reward (extends TTRL with more methods)
+  enable: False
+
+  # The type of unsupervised reward: "ensemble", "certainty" or "external"
+  type: "ensemble"
+
+  # Estimator for certainty/ensemble reward:
+  # - certainty: self_certainty, token_level_entropy, trajectory_level_entropy, probability
+  # - ensemble: single_vote_gt, majority_voting, random_gt_zero_adv, entropy_gt_zero_adv, avg_prob_gt_zero_adv, grpo_adv_diff_top_gt, grpo_adv_diff_probe_setscorer, oracle_wrong_random_gt
+  # - external: self_verify
+  estimator: "self_certainty"
+
+  # For ensemble estimator = entropy_gt_zero_adv:
+  # Fraction of prompts to query real GT labels each step (top by answer-cluster entropy).
+  entropy_gt_top_pct: 0.2
+
+  # When True, zero advantages/returns for entropy-ranked prompts that use majority-vote GT.
+  # When False, train non-GT prompts with their majority-vote GT.
+  entropy_gt_mask_non_gt: True
+
+  # For ensemble estimator = avg_prob_gt_zero_adv:
+  # Fraction of prompts to query real GT labels each step (lowest average response probability).
+  avg_prob_gt_top_pct: 0.2
+
+  # When True, zero advantages/returns for average-probability-ranked prompts that use majority-vote GT.
+  # When False, train non-GT prompts with their majority-vote GT.
+  avg_prob_gt_mask_non_gt: True
+
+  # For ensemble estimator = majority_voting:
+  # When True, zero the GRPO advantages for prompts whose majority-voted
+  # pseudo label does not match the original ground truth.
+  zero_wrong_majority_adv: False
+
+  # For ensemble estimator = grpo_adv_diff_probe_setscorer:
+  # Fraction of prompts to query real GT labels each step (top by soft-gated score).
+  probe_gt_top_pct: 0.2
+  # Fraction of prompts gated out by stage-1 probe after warmup.
+  probe_prob_gate: 0.1
+  # Binary probe dims. (Legacy probe_hidden_proj_dim / probe_global_hidden_dim are still supported.)
+  probe_hidden_dim: 1024
+  probe_mid_dim: 256
+  # Legacy setscorer dims (kept for compatibility).
+  probe_hidden_proj_dim: 256
+  probe_global_hidden_dim: 256
+  probe_score_hidden_dim: 128
+  probe_activation: "mish"
+  # Probe optimizer learning rate.
+  probe_lr: 1e-3
+  # Probe optimizer lr schedule by step.
+  probe_lr_stage1: 1e-3
+  probe_lr_stage2: 1e-3
+  # Probe optimizer weight decay.
+  probe_weight_decay: 0.0
+  # Probe updates per trainer step.
+  probe_train_steps: 1
+  # Gradient clipping norm for probe updates.
+  probe_grad_clip_norm: 1.0
+  # Probe class-balance CE weighting: inverse-sqrt(freq)^power clipped to [min, max].
+  probe_class_weight_power: 0.5
+  probe_class_weight_min: 0.25
+  probe_class_weight_max: 4.0
+  # Probe replay buffer capacity (number of prompt-level samples).
+  probe_buffer_size: 4096
+  # Number of historical samples drawn from probe buffer per train step (0 means use full history buffer).
+  probe_buffer_batch_size: 256
+  # Probe training device: cpu / cuda / auto.
+  probe_device: "cpu"
+  # Max number of ranked answer clusters used in probe auxiliary features.
+  probe_max_clusters: 8
+
+  # For random GT selection based estimators:
+  # the random ratio of prompts that keep original GT.
+  random_gt_top_pct: 0.1
+
+  # When True, zero advantages/returns for random-selected prompts that use majority-vote GT.
+  # When False, train non-GT prompts with their majority-vote GT.
+  random_gt_mask_non_gt: True
+
+  # Soft advantage scaling for grpo_adv_diff estimators.
+  # For pseudo-label prompts only:
+  #   coef = exp(-soft_adv * |ΔA| / (mean_pseudo(|ΔA|) + 1e-8))
+  # Larger advantage-difference norm means less reliable pseudo labels.
+  # Set soft_adv <= 0 to disable this scaling.
+  soft_adv: 0.0
